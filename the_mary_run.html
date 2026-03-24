@@ -31,13 +31,57 @@ body{background:#1a1a18;display:flex;justify-content:center;align-items:center;m
 .overlay-btns.row .overlay-btn{width:auto;padding:9px 26px}
 
 /* ── HUD ── */
-#hud{position:absolute;top:0;left:0;width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(0,0,0,0.22);opacity:0;transition:opacity 0.4s;pointer-events:none}
+#hud{position:absolute;top:0;left:0;width:100%;display:flex;justify-content:center;opacity:0;transition:opacity 0.4s;pointer-events:none}
 #hud.visible{opacity:1}
-.hud-score{font-size:14px;font-weight:500;color:#fff}
-.hud-mode{font-size:10px;padding:2px 9px;border-radius:999px;background:rgba(239,159,39,0.35);color:#EF9F27;font-weight:500}
-.hud-goal{font-size:11px;color:rgba(255,255,255,0.65)}
+#hud-container{
+  display:inline-flex;flex-direction:column;align-items:center;gap:4px;
+  padding:8px 16px;
+  border-image-source:url('assets/ui-hud-container.png');
+  border-image-slice:192 192 192 192 fill;
+  border-width:32px;
+  border-style:solid;
+  border-color:transparent;
+  border-image-repeat:repeat repeat;
+}
+#hud-score{font-size:13px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6)}
+#hud-goal-text{font-size:10px;color:rgba(255,255,255,0.7);text-shadow:0 1px 2px rgba(0,0,0,0.5)}
+#egg-slots{display:flex;gap:3px;align-items:center}
+.egg-slot{
+  width:24px;height:24px;
+  background-image:url('assets/ui-hud-egg-slot.png');
+  background-size:contain;background-repeat:no-repeat;background-position:center;
+  transition:transform 0.15s;
+}
+/* 스토리모드: 알 3종 순서대로 교차 */
+.egg-slot.filled{background-size:contain;background-position:center}
+.egg-slot.filled:nth-child(3n+1){background-image:url('assets/easter-egg-1.png')}
+.egg-slot.filled:nth-child(3n+2){background-image:url('assets/easter-egg-2.png')}
+.egg-slot.filled:nth-child(3n+3){background-image:url('assets/easter-egg-3.png')}
+/* 무한모드: 바구니 이미지로 교체 */
+.egg-slot.filled.basket{background-image:url('assets/easter-egg-basket.png')}
 
-/* ── 조작 팁 ── */
+/* ── 볼륨 컨트롤 ── */
+#volume-control{
+  position:absolute;bottom:12px;right:12px;
+  display:flex;align-items:center;gap:6px;
+  opacity:0.7;transition:opacity 0.2s;
+}
+#volume-control:hover{opacity:1}
+#volume-icon{font-size:14px;cursor:pointer;user-select:none;color:#fff}
+#volume-slider{
+  -webkit-appearance:none;appearance:none;
+  width:80px;height:4px;border-radius:2px;
+  background:rgba(255,255,255,0.3);outline:none;cursor:pointer;
+}
+#volume-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:12px;height:12px;border-radius:50%;
+  background:#fff;cursor:pointer;
+}
+#volume-slider::-moz-range-thumb{
+  width:12px;height:12px;border-radius:50%;
+  background:#fff;cursor:pointer;border:none;
+}
 .game-tip{position:absolute;bottom:5px;left:0;width:100%;text-align:center;font-size:11px;color:rgba(255,255,255,0.4);pointer-events:none;display:none}
 </style>
 </head>
@@ -45,15 +89,27 @@ body{background:#1a1a18;display:flex;justify-content:center;align-items:center;m
 <div id="root">
   <canvas id="gameCanvas" width="700" height="360"></canvas>
   <div id="hud">
-    <div class="hud-score">점수: <span id="score-display">0</span></div>
-    <div class="hud-mode" id="hud-mode-badge">스토리</div>
-    <div class="hud-goal" id="hud-goal-text">목표: 500점</div>
+    <div id="hud-container">
+      <div id="hud-score">점수: <span id="score-display">0</span></div>
+      <div id="hud-goal-text">목표: 500점</div>
+      <div id="egg-slots">
+        <div class="egg-slot" id="egg-slot-0"></div>
+        <div class="egg-slot" id="egg-slot-1"></div>
+        <div class="egg-slot" id="egg-slot-2"></div>
+        <div class="egg-slot" id="egg-slot-3"></div>
+        <div class="egg-slot" id="egg-slot-4"></div>
+      </div>
+    </div>
   </div>
   <div class="overlay" id="menu-overlay">
     <div class="overlay-sub">모드를 선택하세요</div>
     <div class="overlay-btns">
       <button class="overlay-btn" onclick="onStartBtn('story')">스토리 모드</button>
       <button class="overlay-btn" onclick="onStartBtn('infinite')">무한 모드</button>
+    </div>
+    <div id="volume-control">
+      <span id="volume-icon">🔊</span>
+      <input type="range" id="volume-slider" min="0" max="100" value="80">
     </div>
   </div>
   <div class="game-tip" id="game-tip">스페이스 / 위: 점프 | 아래: 숙이기</div>
@@ -76,13 +132,17 @@ body{background:#1a1a18;display:flex;justify-content:center;align-items:center;m
 </div>
 <script>
 // ════════════════════════════════════════════════
+//  수집 목표 상수 (DOM 캐싱보다 먼저 선언 — elEggSlots 초기화 순서 오류 방지)
+// ════════════════════════════════════════════════
+const EGG_COUNT = 5; // 수집 목표 이스터에그 수 — 이 값만 바꾸면 됨
+
+// ════════════════════════════════════════════════
 //  DOM 캐싱 — 매 프레임 querySelector 호출 방지
 // ════════════════════════════════════════════════
 const canvas     = document.getElementById('gameCanvas');
 const ctx        = canvas.getContext('2d');
 const elScore    = document.getElementById('score-display');
 const elHud      = document.getElementById('hud');
-const elHudBadge = document.getElementById('hud-mode-badge');
 const elHudGoal  = document.getElementById('hud-goal-text');
 const elGameTip  = document.getElementById('game-tip');
 const elGoScore  = document.getElementById('go-score');
@@ -90,6 +150,10 @@ const elGoRecord = document.getElementById('go-record');
 const elMenuOv   = document.getElementById('menu-overlay');
 const elGameOv   = document.getElementById('gameover-overlay');
 const elEndOv    = document.getElementById('ending-overlay');
+const elVolSlider = document.getElementById('volume-slider');
+const elVolIcon   = document.getElementById('volume-icon');
+// 알 슬롯 DOM 참조 (EGG_COUNT 먼저 선언됨 → 초기화 순서 안전)
+const elEggSlots   = Array.from({length: EGG_COUNT}, (_, i) => document.getElementById(`egg-slot-${i}`));
 
 // ════════════════════════════════════════════════
 //  다크모드 감지 — 매 프레임 matchMedia 호출 방지
@@ -99,6 +163,32 @@ let isDark   = darkMQ.matches;
 darkMQ.addEventListener('change', e => { isDark = e.matches; });
 
 // ════════════════════════════════════════════════
+//  볼륨 설정
+//  masterVolume: 0~1, 나중에 BGM/효과음에 곱해서 사용
+//  localStorage로 저장 → 재방문 시 유지
+// ════════════════════════════════════════════════
+let masterVolume = parseFloat(localStorage.getItem('maryRunVolume') ?? '0.8');
+elVolSlider.value = Math.round(masterVolume * 100);
+// 볼륨 아이콘 업데이트 함수
+function updateVolIcon() {
+  elVolIcon.textContent = masterVolume === 0 ? '🔇' : masterVolume < 0.5 ? '🔉' : '🔊';
+}
+updateVolIcon();
+// 슬라이더 조작 시 볼륨 갱신
+elVolSlider.addEventListener('input', () => {
+  masterVolume = elVolSlider.value / 100;
+  localStorage.setItem('maryRunVolume', masterVolume);
+  updateVolIcon();
+});
+// 아이콘 클릭 시 음소거 토글
+elVolIcon.addEventListener('click', () => {
+  masterVolume = masterVolume > 0 ? 0 : elVolSlider.value / 100 || 0.8;
+  elVolSlider.value = Math.round(masterVolume * 100);
+  localStorage.setItem('maryRunVolume', masterVolume);
+  updateVolIcon();
+});
+
+// ════════════════════════════════════════════════
 //  게임 밸런스 상수
 // ════════════════════════════════════════════════
 const STORY_GOAL     = 500;            // 스토리 모드 클리어 점수
@@ -106,8 +196,7 @@ const INIT_SPEED     = 4;              // 시작 속도
 const MAX_SPEED      = 23;             // 최대 속도 상한 (18 * 1.3 ≈ 23)
 const BOOST_AMOUNT   = 2.5;            // 점수 구간 달성 시 1회 속도 추가량
 const BOOST_INTERVAL = STORY_GOAL / 2; // 부스트 발동 점수 간격 (STORY_GOAL 기준 자동 계산)
-const EGG_COUNT      = 3;             // 수집 목표 이스터에그 수 — 이 값만 바꾸면 됨
-const INVINCIBLE_MS  = 5000;          // 바구니 무적 시간 (ms) — 수정 용이하게 상수로
+const INVINCIBLE_MS  = 5000;          // 바구니 무적 시간 (ms)
 // 스토리 배경 구간 수 (짝수 필수 — 마지막이 항상 street으로 끝남)
 // tomb/street 번갈아 등장: 4구간 = tomb→street→tomb→street
 // STORY_GOAL 변경 시 구간당 점수 자동 재계산됨
@@ -118,27 +207,42 @@ const BG_SEGMENTS    = 4;
 // ════════════════════════════════════════════════
 const GRAVITY          = 0.6;  // 중력 가속도 (프레임당)
 let   JUMP_VELOCITY    = -10;  // 점프 초기 속도 — resizeCanvas에서 H 기준 갱신
-const SPEED_DROP_COEFF = 3;    // 공중 아래키 중력 배수 (빠른 낙하)
+const SPEED_DROP_COEFF   = 5;    // 공중 아래키 중력 배수 (빠른 낙하 강화 3→5)
+const GLIDE_GRAVITY_COEFF = 0.05; // 활공 중 중력 배수 (점프키 유지 시 — 기본의 5%)
+const MAX_GLIDE_MS        = 200;  // 최대 활공 시간 (ms) — 장애물 높이 변경 시 함께 조정
+                                  // 목표: Ground1(tallObH) 2개 높이 정도 (OB_SIZE.tombGround1.hR 참조)
 
 // ════════════════════════════════════════════════
-//  장애물 상수 (원본 공룡 게임 GAP 공식 기반)
-//  타입명: cactus(항아리), rock(바위), pigeon(비둘기), crow(까마귀)
+//  장애물 상수 (맵별 타입 기반)
+//  타입: tombGround1(높고얇), tombGround2(넓고낮), tombAir1(공중)
+//        streetGround1(높고얇), streetGround2(넓고낮), streetAir1(공중)
 // ════════════════════════════════════════════════
-const GAP_COEFFICIENT  = 0.6;   // 장애물 간격 기본 배수
-const MAX_GAP_COEFF    = 1.5;   // 장애물 간격 최대 배수
-const OB_MIN_GAP       = { cactus:120, rock:150, pigeon:130, crow:200 }; // 타입별 최소 간격
-// 타입별 히트박스 마진 비율 (SPRITE_W/H 기준)
-// 값이 클수록 히트박스가 작아져 아슬아슬하게 피할 수 있음
+const GAP_COEFFICIENT  = 0.6;  // 장애물 간격 기본 배수
+const MAX_GAP_COEFF    = 1.5;  // 장애물 간격 최대 배수
+
+// 타입별 최소 간격 (px)
+const OB_MIN_GAP = {
+  tombGround1:   120, // tomb 지상1 (높고 얇은 것)
+  tombGround2:   150, // tomb 지상2 (넓고 낮은 것)
+  tombAir1:      200, // tomb 공중
+  streetGround1: 120, // street 지상1
+  streetGround2: 150, // street 지상2
+  streetAir1:    200, // street 공중
+};
+
+// 타입별 히트박스 마진 비율 (SPRITE_W/H 기준, 클수록 히트박스 작아짐)
 const OB_MARGIN = {
-  cactus: { x: 0.35, y: 0.2  }, // 항아리: 가로 넉넉히, 세로도 여유
-  rock:   { x: 0.3,  y: 0.25 }, // 바위: 둥근 형태 반영
-  pigeon: { x: 0.3,  y: 0.25 }, // 비둘기: 구르는 형태
-  crow:   { x: 0.3,  y: 0.2  }, // 까마귀: 날개 제외
+  tombGround1:   { x: 0.35, y: 0.2  }, // 높고 얇은 것: 가로 여유
+  tombGround2:   { x: 0.3,  y: 0.25 }, // 넓고 낮은 것: 세로 여유
+  tombAir1:      { x: 0.3,  y: 0.2  }, // 공중: 날개 제외
+  streetGround1: { x: 0.35, y: 0.2  },
+  streetGround2: { x: 0.3,  y: 0.25 },
+  streetAir1:    { x: 0.3,  y: 0.2  },
 };
 const SCORE_DIVISOR    = 25;    // 이동거리 → 점수 환산 (25px = 1점, 원본 방식)
 const CROW_MIN_SCORE   = 200;   // 까마귀(crow) 등장 시작 점수
 const DOUBLE_OB_SCORE  = 300;   // 장애물 2개 묶음 스폰 시작 점수
-const DOUBLE_OB_CHANCE = 0.3;   // 장애물 2개 묶음 스폰 확률 (30%)
+const DOUBLE_OB_CHANCE = 0.4;   // 장애물 2개 묶음 스폰 확률 (30%→40%)
 const COLLECTIBLE_RATIO = 0.6;  // 수집품 크기 비율 (SPRITE_H 대비) — 이 값만 수정
 // CROW_H, MAX_GAP, MIN_COLLECTIBLE_GAP, COLLECTIBLE_SIZE는 resizeCanvas에서 갱신
 let CROW_H             = 30;  // 까마귀 높이 — resizeCanvas에서 SPRITE_H * 0.625로 자동 갱신
@@ -153,7 +257,7 @@ let COLLECTIBLE_YS     = [];  // 수집품 3단계 높이 — resizeCanvas에서
 //  SPRITE_RATIO: 기준 비율 — 이 값만 수정하면 전체 캐릭터 크기 변경
 // ════════════════════════════════════════════════
 const SPRITE_RATIO = 0.09; // 캐릭터 크기 비율 (W 대비) — 크기 조절 시 이 값만 수정
-const RUN_FRAMES   = 7;    // 달리기 스프라이트 시트 프레임 수 (mary-running.png 기준)
+const RUN_FRAMES   = 7;    // 스프라이트 시트 프레임 수 — 달리기(mary-running.png) + 공중 장애물(Air1) 공통
 let SPRITE_W = 48; // resizeCanvas에서 W * SPRITE_RATIO로 갱신
 let SPRITE_H = 48; // resizeCanvas에서 SPRITE_W와 동일하게 갱신 (정사각형)
 let DUCK_H   = 24; // resizeCanvas에서 SPRITE_H / 2로 갱신
@@ -203,15 +307,15 @@ function resizeCanvas() {
     GROUND_Y - Math.round(SPRITE_H * 2.0) - COLLECTIBLE_SIZE, // 상단: 높은 점프 중 먹기
   ];
 
-  // 장애물 최대 간격 캡 (W 기준 — 규칙5 준수)
-  // W * 0.85: 화면 너비의 85% 이상 간격 불가 → 후반 널널함 방지
+  // 장애물 최대 간격 캡 초기값 (게임루프에서 진행률에 따라 동적 축소)
+  // 초반: W * 0.85 / 후반: W * 0.4 (점수 진행률 비례)
   MAX_GAP = Math.round(W * 0.85);
 
-  // 점프 속도: 가장 큰 장애물(cactus = SPRITE_H*0.833)을 여유롭게 넘을 수 있는 높이로 계산
-  // 물리 공식: v = sqrt(2 * g * h), h = cactusH + margin
-  const cactusH     = Math.round(SPRITE_H * 0.833); // cactus 높이 (40/48 기준)
-  const jumpMargin  = Math.round(SPRITE_H * 0.6);   // 여유 공간 증가 (0.3 → 0.6)
-  JUMP_VELOCITY     = -Math.sqrt(2 * GRAVITY * (cactusH + jumpMargin)); // 역산
+  // 점프 속도: 가장 큰 지상 장애물(Ground1 = SPRITE_H*0.9)을 여유롭게 넘을 수 있는 높이로 계산
+  // 물리 공식: v = sqrt(2 * g * h), h = tallObH + margin
+  const tallObH    = Math.round(SPRITE_H * 0.85); // 가장 높은 지상 장애물 (streetGround1 hR 기준)
+  const jumpMargin = Math.round(SPRITE_H * 0.1); // 기본 점프 최소화 → 활공으로 높이 보완
+  JUMP_VELOCITY    = -Math.sqrt(2 * GRAVITY * (tallObH + jumpMargin)); // 역산
 
   // 까마귀(crow) 높이 3단계 (GROUND_Y, SPRITE_H, CROW_H 기준 상대값)
   CROW_YS = [
@@ -266,7 +370,8 @@ function loadImage(src) {
 // ════════════════════════════════════════════════
 //  이미지 슬롯 — assets/ 폴더 경로 참조
 //  캐릭터: pray, stand, run(스프라이트시트), jump, duck
-//  장애물: pot(항아리), rock(바위), pigeon(비둘기), crow(까마귀)
+//  장애물: tombGround1/2, tombAir1 (tomb 구간)
+//          streetGround1/2, streetAir1 (street 구간)
 //  수집품: egg1~3(이스터에그 3종), basket(무적 바구니)
 //  배경:   bgTomb(전반), bgStreet(후반), bgGround(땅)
 //  UI:     logo(메뉴 타이틀), maryIcon(진행바 아이콘)
@@ -279,11 +384,15 @@ const imgs = {
   jump:      loadImage('assets/mary-jumping.png'),   // 점프 폼
   duck:      loadImage('assets/mary-sliding.png'),   // 숙이기(슬라이딩) 폼
 
-  // ── 장애물 ──
-  pot:       loadImage('assets/obstacle-pot.png'),     // 항아리 (구 cactus)
-  rock:      loadImage('assets/obstacle-rock.png'),    // 바위
-  pigeon:    loadImage('assets/obstacle-pigeon.png'),  // 비둘기 (구 tumbleweed, 구르는 장애물)
-  crow:      loadImage('assets/obstacle-crow.png'),    // 까마귀 (구 ptero, 나는 장애물)
+  // ── 장애물 (맵별 구분) ──
+  // tomb 구간 장애물 (이미지 파일명 미정 → 추후 교체)
+  tombGround1: loadImage('assets/obstacle-tomb-ground1.png'), // tomb 지상 1 (높고 얇은 것)
+  tombGround2: loadImage('assets/obstacle-tomb-ground2.png'), // tomb 지상 2 (넓고 낮은 것)
+  tombAir1:    loadImage('assets/obstacle-tomb-air1.png'),    // tomb 공중 1
+  // street 구간 장애물 (이미지 파일명 미정 → 추후 교체)
+  streetGround1: loadImage('assets/obstacle-street-ground1.png'), // street 지상 1 (높고 얇은 것)
+  streetGround2: loadImage('assets/obstacle-street-ground2.png'), // street 지상 2 (넓고 낮은 것)
+  streetAir1:    loadImage('assets/obstacle-street-air1.png'),    // street 공중 1
 
   // ── 수집품 ──
   egg1:      loadImage('assets/easter-egg-1.png'),    // 이스터에그 디자인 1
@@ -297,9 +406,9 @@ const imgs = {
   bgGround:  loadImage('assets/ground.png'),            // 땅 타일 (naturalWidth 기준 반복)
 
   // ── UI ──
-  logo:        loadImage('assets/logo.png'),        // 메뉴 타이틀 로고
-  maryIcon:    loadImage('assets/mary-icon.png'),   // 진행바 플레이어 위치 아이콘
-  disciples:   loadImage('assets/disciples.png'),   // 엔딩씬 제자들 (1137*640)
+  logo:         loadImage('assets/logo.png'),             // 메뉴 타이틀 로고
+  maryIcon:     loadImage('assets/mary-icon.png'),        // 진행바 플레이어 위치 아이콘
+  disciples:    loadImage('assets/disciples.png'),        // 엔딩씬 제자들
 };
 
 // ════════════════════════════════════════════════
@@ -346,6 +455,7 @@ const player = {
   ducking: true,      // 숙이기 상태
   speedDrop: false,   // 공중 아래키 빠른 낙하 여부
   ground: 0,          // 지면 y좌표 (resizeCanvas에서 갱신)
+  glideTimer: 0,      // 활공 누적 시간 (ms) — MAX_GLIDE_MS 초과 시 활공 종료
 };
 
 let openingTimer = 0;      // 오프닝 연출 타이머 (ms)
@@ -370,7 +480,7 @@ let onFadeComplete = null;       // 페이드 완료 콜백
 // ════════════════════════════════════════════════
 //  입력 상태
 // ════════════════════════════════════════════════
-const keys = { down: false };
+const keys = { down: false, jump: false }; // jump: 점프키 누르고 있는 동안 true
 
 // ════════════════════════════════════════════════
 //  게임 오브젝트 배열
@@ -428,7 +538,6 @@ function onStartBtn(m) {
   mode = m;
   hideOverlay(elGameOv);
   hideOverlay(elEndOv);
-  elHudBadge.textContent = m === 'story' ? '스토리' : '무한';
   elHudGoal.textContent  = m === 'story' ? '목표: ' + STORY_GOAL + '점' : '최고: ' + bestScore + '점';
 
   // CSS로 메뉴 오버레이 페이드아웃
@@ -477,8 +586,9 @@ function resetGameState() {
   obstacles      = [];
   particles      = [];
   collectibles   = [];                          // 수집품 초기화
-  collectedEggs  = 0;                           // 이스터에그 수집 초기화
-  eggHudPulse    = 0;                           // HUD 펄스 초기화
+  collectedEggs  = 0;
+  eggHudPulse    = 0;
+  elEggSlots.forEach(s => { s.classList.remove('filled', 'basket'); s.style.transform = ''; });
   eggBonusReady  = false;                       // 엔딩B 조건 초기화
   invincible     = false;                       // 무적 상태 초기화
   invincibleTimer= 0;                           // 무적 타이머 초기화
@@ -513,7 +623,9 @@ function resetGameState() {
   player.onGround  = true;
   player.ducking   = true;
   player.speedDrop = false;
+  player.glideTimer= 0;   // 활공 타이머 초기화
   keys.down        = false;
+  keys.jump        = false; // 점프키 상태 초기화
   elScore.textContent = '0';
 }
 
@@ -556,9 +668,10 @@ function restartGame() {
 function doJump() {
   if(gamePhase !== 'playing') return;
   if(player.onGround && !player.ducking) {
-    player.vy        = JUMP_VELOCITY;
-    player.onGround  = false;
-    player.speedDrop = false;
+    player.vy          = JUMP_VELOCITY;
+    player.onGround    = false;
+    player.speedDrop   = false;
+    player.glideTimer  = 0; // 점프 시 활공 타이머 리셋
     spawnParticles(player.x + SPRITE_W / 2, player.y + SPRITE_H, 5);
   }
 }
@@ -574,27 +687,40 @@ function endDuck() {
 }
 
 document.addEventListener('keydown', e => {
-  if(e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); doJump();    }
-  if(e.code === 'ArrowDown')                     { e.preventDefault(); startDuck(); }
+  if(e.code === 'Space' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    keys.jump = true; // 점프키 누름 상태 기록 (활공용)
+    doJump();
+  }
+  if(e.code === 'ArrowDown') { e.preventDefault(); startDuck(); }
 });
-document.addEventListener('keyup', e => { if(e.code === 'ArrowDown') endDuck(); });
+document.addEventListener('keyup', e => {
+  if(e.code === 'Space' || e.code === 'ArrowUp') keys.jump = false; // 활공 종료
+  if(e.code === 'ArrowDown') endDuck();
+});
 canvas.addEventListener('click',      doJump);
-canvas.addEventListener('touchstart', e => { e.preventDefault(); doJump(); });
+canvas.addEventListener('touchstart', e => { e.preventDefault(); keys.jump = true;  doJump(); });
+canvas.addEventListener('touchend',   e => { e.preventDefault(); keys.jump = false; });
 
 // ════════════════════════════════════════════════
 //  장애물 유틸
-//  타입: cactus(항아리), rock(바위), pigeon(비둘기), crow(까마귀)
+//  타입: tombGround1/2, tombAir1, streetGround1/2, streetAir1
 //  OB_SIZE: 타입별 크기 비율 (SPRITE_W/H 기준)
 //  hR: null이면 CROW_H 사용 (resizeCanvas에서 갱신되는 값)
+//  groundOffset: 지면 묻힘 비율 (SPRITE_H 기준, 0이면 지면에 딱 붙음)
 // ════════════════════════════════════════════════
 const OB_SIZE = {
-  cactus: { wR: 0.5,   hR: 0.833 }, // 항아리: 24/48, 40/48
-  rock:   { wR: 0.75,  hR: 0.7   }, // 바위: 더 크게
-  pigeon: { wR: 0.583, hR: 0.625 }, // 비둘기: 28/48, 30/48
-  crow:   { wR: 0.958, hR: null  }, // 까마귀: 46/48, CROW_H (resizeCanvas 갱신)
+  tombGround1:   { wR: 0.85, hR: 0.55, groundOffset: 0.15 }, // tomb 지상1: 돌무더기
+  tombGround2:   { wR: 0.85, hR: 0.8,  groundOffset: 0.15 }, // tomb 지상2: 큰바위
+  tombAir1:      { wR: 0.958,hR: null,  groundOffset: 0    }, // tomb 공중
+  streetGround1: { wR: 0.75, hR: 0.85, groundOffset: 0.15 }, // street 지상1: 항아리
+  streetGround2: { wR: 0.9,  hR: 0.9,  groundOffset: 0.15 }, // street 지상2: 노점
+  streetAir1:    { wR: 0.958,hR: null,  groundOffset: 0    }, // street 공중
 };
 function getOW(t) { return Math.round(SPRITE_W * OB_SIZE[t].wR); }
 function getOH(t) { return OB_SIZE[t].hR ? Math.round(SPRITE_H * OB_SIZE[t].hR) : CROW_H; }
+// 지면 묻힘 오프셋 (SPRITE_H 기준 — 규칙5 준수)
+function getGroundOffset(t) { return Math.round(SPRITE_H * (OB_SIZE[t].groundOffset || 0)); }
 
 // 원본 공룡 게임 GAP 공식 + MAX_GAP 캡
 // MAX_GAP: 후반 간격이 너무 넓어지는 현상 방지 (W 기준 상대값)
@@ -605,28 +731,41 @@ function calcGap(t) {
 }
 
 // 장애물 스폰
+// 현재 구간(tomb/street)에 따라 타입 선택
+// tomb: tombGround1/2(지상) + tombAir1(공중)
+// street: streetGround1/2(지상) + streetAir1(공중)
 function spawnObstacle() {
-  // 스토리 모드: 클리어 전 도달 불가능한 장애물 생성 안 함
   if(mode === 'story' && distanceRan >= LAST_SPAWN_DIST) return;
 
-  const gt = ['cactus', 'rock', 'pigeon']; // 땅 위 장애물 3종
-  const t  = (displayScore >= CROW_MIN_SCORE && Math.random() < 0.3)
-             ? 'crow' : gt[Math.floor(Math.random() * 3)];
+  // 현재 구간 판단 (배경과 항상 일치 — drawBg와 동일 로직)
+  // 스토리: BG_SEGMENTS 구간 기준 / 무한: totalDist 사이클 기준
+  const totalDist = STORY_GOAL * SCORE_DIVISOR;
+  const isTomb = mode === 'story'
+    ? Math.min(Math.floor(distanceRan / (totalDist / BG_SEGMENTS)), BG_SEGMENTS - 1) % 2 === 0
+    : Math.floor(distanceRan / totalDist) % 2 === 0; // 무한: 사이클마다 tomb/street 번갈아
+  const prefix    = isTomb ? 'tomb' : 'street';
+
+  // 공중 장애물 확률 (CROW_MIN_SCORE 이후 30%)
+  const useAir = displayScore >= CROW_MIN_SCORE && Math.random() < 0.3;
+  const t = useAir
+    ? `${prefix}Air1`
+    : Math.random() < 0.5 ? `${prefix}Ground1` : `${prefix}Ground2`;
+
   const w = getOW(t), h = getOH(t);
-  const y = t === 'crow'
-            ? CROW_YS[Math.floor(Math.random() * 3)]
-            : GROUND_Y - h;
+  const y = useAir
+    ? CROW_YS[Math.floor(Math.random() * 3)]
+    : GROUND_Y - h + getGroundOffset(t);
 
   obstacles.push({ x: W + 10, y, w, h, type: t, rot: 0 });
 
   // 후반 장애물 2개 묶음 스폰 (DOUBLE_OB_SCORE 이후, DOUBLE_OB_CHANCE 확률)
-  // 두 번째 장애물은 첫 번째로부터 SPRITE_W * 1.5 간격으로 바짝 붙여서 스폰
-  if(displayScore >= DOUBLE_OB_SCORE && Math.random() < DOUBLE_OB_CHANCE) {
-    const t2 = gt[Math.floor(Math.random() * 3)]; // 두 번째는 땅 위 장애물만
+  // 첫 번째가 지상 장애물일 때만 적용 (공중 장애물 묶음 스폰 제외)
+  if(!useAir && displayScore >= DOUBLE_OB_SCORE && Math.random() < DOUBLE_OB_CHANCE) {
+    const t2 = Math.random() < 0.5 ? `${prefix}Ground1` : `${prefix}Ground2`;
     const w2 = getOW(t2), h2 = getOH(t2);
     obstacles.push({
-      x: W + 10 + w + Math.round(SPRITE_W * 1.5), // 첫 번째 장애물 바로 뒤
-      y: GROUND_Y - h2, w: w2, h: h2, type: t2, rot: 0
+      x: W + 10 + w + Math.round(SPRITE_W * 0.3), // 첫 번째 장애물에 바짝 붙여서 스폰
+      y: GROUND_Y - h2 + getGroundOffset(t2), w: w2, h: h2, type: t2, rot: 0
     });
   }
 
@@ -754,14 +893,21 @@ function spawnParticles(x, y, n) {
 function updatePhysics(fd, gs) {
   // 플레이어 수직 물리
   if(!player.onGround) {
-    const gm = player.speedDrop ? SPEED_DROP_COEFF : 1;
+    // 활공 판정: 점프키 누르고 있고 + 상승 중이며 + 활공 시간 미초과
+    const isGliding = keys.jump && player.vy < 0 && player.glideTimer < MAX_GLIDE_MS;
+    if(isGliding) player.glideTimer += gs * 16.67; // ms 누적 (gs는 프레임 스케일)
+
+    const gm = player.speedDrop ? SPEED_DROP_COEFF
+             : isGliding        ? GLIDE_GRAVITY_COEFF
+             : 1;
     player.vy += GRAVITY * gm * gs;
     player.y  += player.vy * gs;
     if(player.y >= player.ground) {
-      player.y         = player.ground;
-      player.vy        = 0;
-      player.onGround  = true;
-      player.speedDrop = false;
+      player.y          = player.ground;
+      player.vy         = 0;
+      player.onGround   = true;
+      player.speedDrop  = false;
+      player.glideTimer = 0; // 착지 시 활공 타이머 리셋
       if(keys.down) player.ducking = true;
     }
   }
@@ -854,22 +1000,23 @@ function drawBg() {
 
   // ── tomb 배경 드로우 ──
   // Math.round: 소수점 x좌표 서브픽셀 렌더링 끊김 방지
+  // H까지 그려서 ground 투명 픽셀 아래에 배경이 비치도록
   ctx.globalAlpha = 1 - bgFadeAlpha;
   if(imgs.bgTomb.naturalWidth > 0)
-    ctx.drawImage(imgs.bgTomb,   Math.round(bgX), 0, W, tombImgH,   0, 0, W, GROUND_Y);
+    ctx.drawImage(imgs.bgTomb,   Math.round(bgX), 0, W, tombImgH,   0, 0, W, H);
   else {
     ctx.fillStyle = isDark ? '#1a1a18' : '#2C1810';
-    ctx.fillRect(0, 0, W, GROUND_Y);
+    ctx.fillRect(0, 0, W, H);
   }
 
   // ── street 배경 드로우 (크로스페이드) ──
   if(bgFadeAlpha > 0) {
     ctx.globalAlpha = bgFadeAlpha;
     if(imgs.bgStreet.naturalWidth > 0)
-      ctx.drawImage(imgs.bgStreet, Math.round(bgX), 0, W, streetImgH, 0, 0, W, GROUND_Y);
+      ctx.drawImage(imgs.bgStreet, Math.round(bgX), 0, W, streetImgH, 0, 0, W, H);
     else {
       ctx.fillStyle = isDark ? '#1a1218' : '#3D2B1F';
-      ctx.fillRect(0, 0, W, GROUND_Y);
+      ctx.fillRect(0, 0, W, H);
     }
   }
   ctx.globalAlpha = 1;
@@ -880,16 +1027,15 @@ function drawBg() {
 //  이미지 없으면 단색 폴백
 // ════════════════════════════════════════════════
 function drawGround() {
-  const gh = H - GROUND_Y; // 땅 영역 높이
+  const gh = H - GROUND_Y;
   if(imgs.bgGround.naturalWidth > 0) {
-    const gw = imgs.bgGround.naturalWidth; // 이미지 원본 너비 기준 타일링
-    // 타일을 화면 너비 채울 만큼 반복
+    const gw = imgs.bgGround.naturalWidth;
+    ctx.imageSmoothingEnabled = false; // true 시 투명↔불투명 경계 블렌딩으로 검은 픽셀 생김
     let x = groundX;
     while(x < W) {
       ctx.drawImage(imgs.bgGround, x, GROUND_Y, gw, gh);
       x += gw;
     }
-    // 왼쪽 빈 공간 채우기
     if(groundX < 0) ctx.drawImage(imgs.bgGround, groundX, GROUND_Y, gw, gh);
   } else {
     ctx.fillStyle = isDark ? '#2C2C2A' : '#D3D1C7';
@@ -909,10 +1055,10 @@ function drawPlayer(ducking, y, fc) {
   const dY = ducking ? GROUND_Y - DUCK_H : y;
 
   if(ducking) {
-    // 숙이기 폼
+    // 숙이기 폼: 히트박스는 DUCK_H, 이미지는 SPRITE_H 그대로 (눌려보이는 현상 방지)
     if(imgs.duck.naturalWidth > 0) {
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(imgs.duck, player.x, dY, SPRITE_W, dH);
+      ctx.drawImage(imgs.duck, player.x, GROUND_Y - SPRITE_H, SPRITE_W, SPRITE_H);
     } else {
       ctx.fillStyle = isDark ? '#888780' : '#5F5E5A';
       ctx.beginPath(); ctx.roundRect(player.x, dY+4, SPRITE_W, DUCK_H-4, 5); ctx.fill();
@@ -991,53 +1137,52 @@ function drawPraying() {
 
 // ════════════════════════════════════════════════
 //  드로우: 장애물
-//  이미지 있으면 스프라이트, 없으면 도형 폴백
+//  타입명과 이미지 슬롯명 일치 (imgs[o.type])
+//  Air1: 공중 / Ground1: 높고얇은 지상 / Ground2: 넓고낮은 지상
+//  이미지 미로드 시 도형 폴백
 // ════════════════════════════════════════════════
 function drawObstacle(o) {
   ctx.save();
-  if(o.type === 'crow') {
-    // 까마귀 (나는 장애물)
-    if(imgs.crow.naturalWidth > 0) {
+  const img = imgs[o.type]; // 타입명 = 이미지 슬롯명
+
+  if(o.type.endsWith('Air1')) {
+    // 공중 장애물: RUN_FRAMES(7) 기반 가로 스프라이트 시트
+    if(img && img.naturalWidth > 0) {
+      const frameW   = img.naturalWidth / RUN_FRAMES;           // 프레임 너비 (자동 계산)
+      const frameIdx = Math.floor(frameCount / 6) % RUN_FRAMES; // 6프레임마다 전환
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(imgs.crow, o.x, o.y, o.w, o.h);
+      ctx.drawImage(img, frameIdx * frameW, 0, frameW, img.naturalHeight, o.x, o.y, o.w, o.h);
     } else {
+      // 폴백: 삼각형
       ctx.fillStyle = isDark ? '#9FE1CB' : '#1D9E75';
-      ctx.beginPath(); ctx.moveTo(o.x+o.w/2,o.y+o.h); ctx.lineTo(o.x,o.y); ctx.lineTo(o.x+o.w,o.y); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = isDark ? '#5DCAA5' : '#0F6E56';
-      ctx.beginPath(); ctx.moveTo(o.x-10,o.y+8); ctx.lineTo(o.x+o.w/2,o.y+4); ctx.lineTo(o.x+o.w+10,o.y+8); ctx.lineTo(o.x+o.w/2,o.y+16); ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(o.x+o.w/2, o.y+o.h);
+      ctx.lineTo(o.x, o.y);
+      ctx.lineTo(o.x+o.w, o.y);
+      ctx.closePath(); ctx.fill();
     }
-  } else if(o.type === 'cactus') {
-    // 항아리
-    if(imgs.pot.naturalWidth > 0) {
+  } else if(o.type.endsWith('Ground1')) {
+    // 지상 장애물 1 (높고 얇은 것)
+    if(img && img.naturalWidth > 0) {
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(imgs.pot, o.x, o.y, o.w, o.h);
+      ctx.drawImage(img, o.x, o.y, o.w, o.h);
     } else {
+      // 폴백: 세로 막대
       ctx.fillStyle = isDark ? '#3B6D11' : '#639922';
-      ctx.fillRect(o.x+8, o.y, 8, o.h);
-      ctx.fillRect(o.x, o.y+10, o.w, 8);
-    }
-  } else if(o.type === 'rock') {
-    // 바위
-    if(imgs.rock.naturalWidth > 0) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(imgs.rock, o.x, o.y, o.w, o.h);
-    } else {
-      ctx.fillStyle = isDark ? '#444441' : '#888780';
-      ctx.beginPath(); ctx.ellipse(o.x+o.w/2, o.y+o.h/2+4, o.w/2, o.h/2, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillRect(o.x + Math.round(o.w*0.3), o.y, Math.round(o.w*0.4), o.h);
+      ctx.fillRect(o.x, o.y + Math.round(o.h*0.3), o.w, Math.round(o.h*0.2));
     }
   } else {
-    // 비둘기 (구르는 장애물)
-    if(imgs.pigeon.naturalWidth > 0) {
+    // 지상 장애물 2 (넓고 낮은 것)
+    if(img && img.naturalWidth > 0) {
       ctx.imageSmoothingEnabled = false;
-      ctx.translate(o.x+o.w/2, o.y+o.h/2);
-      ctx.rotate(o.rot);
-      ctx.drawImage(imgs.pigeon, -o.w/2, -o.h/2, o.w, o.h);
+      ctx.drawImage(img, o.x, o.y, o.w, o.h);
     } else {
-      ctx.translate(o.x+o.w/2, o.y+o.h/2); ctx.rotate(o.rot);
-      ctx.fillStyle = isDark ? '#B4B2A9' : '#888780';
-      ctx.beginPath(); ctx.arc(0, 0, o.w/2, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = isDark ? '#888780' : '#5F5E5A'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(-o.w/2,0); ctx.lineTo(o.w/2,0); ctx.moveTo(0,-o.h/2); ctx.lineTo(0,o.h/2); ctx.stroke();
+      // 폴백: 타원
+      ctx.fillStyle = isDark ? '#444441' : '#888780';
+      ctx.beginPath();
+      ctx.ellipse(o.x+o.w/2, o.y+o.h/2+4, o.w/2, o.h/2, 0, 0, Math.PI*2);
+      ctx.fill();
     }
   }
   ctx.restore();
@@ -1208,40 +1353,38 @@ function drawProgressBar() {
 }
 
 // ════════════════════════════════════════════════
-//  드로우: 이스터에그 수집 HUD (스토리 모드 전용, 좌상단)
-//  바구니 이미지(easter-egg-basket.png) + 수집 현황 텍스트
-//  EGG_COUNT 상수 기준 → 수집 목표 변경 시 자동 반영
-//  수집 시 숫자 잠깐 커지는 펄스 효과 (eggHudPulse 변수로 제어)
-//  모든 크기/위치 W, H 기준 상대값 (규칙5 준수)
+//  HUD 슬롯 업데이트
+//  스토리: 알 5개 슬롯 → 수집한 수만큼 채움 (egg1/2/3 교차, CSS nth-child)
+//  무한:   슬롯 1개만 표시 → 무적 중에만 바구니 이미지로 채움
 // ════════════════════════════════════════════════
-function drawEggHud() {
-  if(mode !== 'story') return; // 스토리 모드에서만 표시
+function updateEggHud() {
+  if(mode === 'story') {
+    // 알 슬롯 5개 모두 표시
+    elEggSlots.forEach((slot, i) => {
+      slot.style.display = '';
+      slot.classList.remove('basket');
+      slot.classList.toggle('filled', i < collectedEggs);
+    });
+    // 펄스 효과
+    if(eggHudPulse > 0) {
+      const idx = collectedEggs - 1;
+      if(idx >= 0 && elEggSlots[idx]) {
+        elEggSlots[idx].style.transform = `scale(${1 + eggHudPulse * 0.3})`;
+      }
+      eggHudPulse = Math.max(0, eggHudPulse - 0.05);
+    } else {
+      elEggSlots.forEach(s => s.style.transform = '');
+    }
 
-  const hudX    = Math.round(W * 0.02);   // 좌상단 x (W 기준)
-  const hudY    = Math.round(H * 0.06);   // 좌상단 y (H 기준, HUD 바 아래)
-  const iconSz  = Math.round(H * 0.045);  // 바구니 아이콘 크기 (H 기준)
-
-  // 펄스 효과: 수집 시 텍스트 크기가 잠깐 커졌다가 원래대로
-  const baseSize  = Math.round(H * 0.032);                          // 기본 폰트 크기 (H 기준)
-  const pulseSize = baseSize + Math.round(eggHudPulse * baseSize * 0.5); // 최대 50% 커짐
-  if(eggHudPulse > 0) eggHudPulse = Math.max(0, eggHudPulse - 0.05);   // 서서히 감소
-
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.4)';
-  ctx.shadowBlur  = 4;
-
-  // 바구니 이미지 (이모티콘 대신 easter-egg-basket.png 사용)
-  if(imgs.basket.naturalWidth > 0) {
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(imgs.basket, hudX, hudY - iconSz * 0.8, iconSz, iconSz);
+  } else {
+    // 무한모드: 슬롯 1개만 표시, 나머지 숨김
+    elEggSlots.forEach((slot, i) => {
+      slot.style.display = i === 0 ? '' : 'none';
+    });
+    // 무적 중에만 바구니 이미지로 채움
+    elEggSlots[0].classList.toggle('filled', invincible);
+    elEggSlots[0].classList.toggle('basket', invincible);
   }
-
-  // 수집 현황 텍스트 (바구니 오른쪽)
-  ctx.font      = `500 ${pulseSize}px system-ui`;
-  ctx.fillStyle = '#fff';
-  ctx.textAlign = 'left';
-  ctx.fillText(`${collectedEggs}/${EGG_COUNT}`, hudX + iconSz + Math.round(W * 0.01), hudY);
-  ctx.restore();
 }
 //  기도 폼(mary-praying.png)으로 대기
 //  logo.png를 캔버스 중앙 상단에 표시
@@ -1288,6 +1431,9 @@ function gameLoop(timestamp) {
       speed          = Math.min(speed + BOOST_AMOUNT, MAX_SPEED);
       nextBoostScore += BOOST_INTERVAL;
     }
+    // MAX_GAP 동적 갱신: displayScore 기반 단계적 감소
+    // W*0.7(초반) → W*0.25(최대) 선형 감소 후 고정 (무한모드도 최솟값에서 멈춤)
+    MAX_GAP = Math.round(W * Math.max(0.7 - (displayScore / STORY_GOAL) * 0.45, 0.25));
   }
 
   // 배경/땅 업데이트: 속도 재계산 후 fd 계산 → 모든 이동이 동일한 fd 사용
@@ -1345,7 +1491,7 @@ function gameLoop(timestamp) {
     ctx.globalAlpha = 1; // 무적 효과 알파 리셋
     drawParticles();
     drawProgressBar(); // 하단 진행바 (스토리 모드만 표시)
-    drawEggHud();      // 좌상단 이스터에그 HUD (스토리 모드만 표시)
+    updateEggHud();     // 좌상단 이스터에그 HUD DOM 업데이트 (스토리 모드만)
 
     // 충돌 감지 (AABB, 타입별 히트박스 마진 — OB_MARGIN 상수 기준)
     // 플레이어 마진: SPRITE_W * 0.2 (아슬아슬하게 피할 수 있는 여유)
