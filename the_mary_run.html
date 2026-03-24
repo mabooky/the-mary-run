@@ -52,11 +52,12 @@ body{background:#1a1a18;display:flex;justify-content:center;align-items:center;m
   background-size:contain;background-repeat:no-repeat;background-position:center;
   transition:transform 0.15s;
 }
-/* 스토리모드: 알 3종 순서대로 교차 */
-.egg-slot.filled{background-size:contain;background-position:center}
-.egg-slot.filled:nth-child(3n+1){background-image:url('assets/easter-egg-1.png')}
-.egg-slot.filled:nth-child(3n+2){background-image:url('assets/easter-egg-2.png')}
-.egg-slot.filled:nth-child(3n+3){background-image:url('assets/easter-egg-3.png')}
+/* 스토리모드: 알 5개 순서대로 */
+#egg-slot-0.filled{background-image:url('assets/easter-egg-1.png')}
+#egg-slot-1.filled{background-image:url('assets/easter-egg-2.png')}
+#egg-slot-2.filled{background-image:url('assets/easter-egg-3.png')}
+#egg-slot-3.filled{background-image:url('assets/easter-egg-4.png')}
+#egg-slot-4.filled{background-image:url('assets/easter-egg-5.png')}
 /* 무한모드: 바구니 이미지로 교체 */
 .egg-slot.filled.basket{background-image:url('assets/easter-egg-basket.png')}
 
@@ -346,8 +347,10 @@ function resizeCanvas() {
 
   // disciples 드로우 크기 (SPRITE_H 기준, 비율 유지 — 규칙5 준수)
   // SPRITE_H * 1.3으로 마리와 자연스러운 비율 유지
-  DISC_H = Math.round(SPRITE_H * 1.3);
-  DISC_W = Math.round(DISC_H * (1137 / 640)); // 원본 비율 유지
+  DISC_H = SPRITE_H; // 예수님 높이 = 마리와 동일
+  DISC_W = imgs.jesus.naturalWidth > 0
+    ? Math.round(DISC_H * (imgs.jesus.naturalWidth / imgs.jesus.naturalHeight))
+    : DISC_H; // 이미지 로드 전엔 정사각형 가정
 
   // 배경 오프셋 리셋
   bgXTomb   = 0;
@@ -403,6 +406,8 @@ const imgs = {
   egg1:      loadImage('assets/easter-egg-1.png'),    // 이스터에그 디자인 1
   egg2:      loadImage('assets/easter-egg-2.png'),    // 이스터에그 디자인 2
   egg3:      loadImage('assets/easter-egg-3.png'),    // 이스터에그 디자인 3
+  egg4:      loadImage('assets/easter-egg-4.png'),    // 이스터에그 디자인 4
+  egg5:      loadImage('assets/easter-egg-5.png'),    // 이스터에그 디자인 5
   basket:    loadImage('assets/easter-egg-basket.png'), // 무적 바구니 (무한모드/HUD용)
 
   // ── 배경 ──
@@ -413,7 +418,7 @@ const imgs = {
   // ── UI ──
   logo:         loadImage('assets/logo.png'),             // 메뉴 타이틀 로고
   maryIcon:     loadImage('assets/mary-icon.png'),        // 진행바 플레이어 위치 아이콘
-  disciples:    loadImage('assets/disciples.png'),        // 엔딩씬 제자들
+  jesus:        loadImage('assets/jesus.png'),           // 엔딩씬 예수님
 };
 
 // ════════════════════════════════════════════════
@@ -720,28 +725,34 @@ canvas.addEventListener('touchend',   e => { e.preventDefault(); keys.jump = fal
 //  게임 중 키 시퀀스 입력 시 발동
 //  qkrgurrjtp: 박혁거세(영타) → 알 5개 즉시 획득
 //  dnxnfl:     우투리(영타)   → 무적 토글
+//  tbzmfla:    슈크림(영타)   → 클리어 점수 즉시 도달
 // ════════════════════════════════════════════════
-const CHEAT_EGGS     = 'qkrgurrjtp';
+const CHEAT_EGGS       = 'qkrgurrjtp';
 const CHEAT_INVINCIBLE = 'dnxnfl';
-const CHEAT_MAX_LEN  = Math.max(CHEAT_EGGS.length, CHEAT_INVINCIBLE.length);
-let cheatBuffer      = ''; // 최근 입력 키 버퍼
+const CHEAT_CLEAR      = 'tbzmfla';
+const CHEAT_MAX_LEN    = Math.max(CHEAT_EGGS.length, CHEAT_INVINCIBLE.length, CHEAT_CLEAR.length);
+let cheatBuffer        = '';
 
 document.addEventListener('keydown', e => {
   if(gamePhase !== 'playing') return;
-  if(e.key.length !== 1) return; // 특수키 무시
+  if(e.key.length !== 1) return;
 
   cheatBuffer = (cheatBuffer + e.key.toLowerCase()).slice(-CHEAT_MAX_LEN);
 
   if(cheatBuffer.endsWith(CHEAT_EGGS)) {
-    // 알 5개 즉시 획득
     collectedEggs = EGG_COUNT;
     eggBonusReady = true;
     eggHudPulse   = 1;
     cheatBuffer   = '';
   } else if(cheatBuffer.endsWith(CHEAT_INVINCIBLE)) {
-    // 무적 토글 (cheatInvincible — 타이머와 무관하게 유지)
     cheatInvincible = !cheatInvincible;
     cheatBuffer     = '';
+  } else if(cheatBuffer.endsWith(CHEAT_CLEAR)) {
+    // 클리어 점수 즉시 도달 → distanceRan을 STORY_GOAL에 맞게 설정
+    distanceRan  = STORY_GOAL * SCORE_DIVISOR;
+    displayScore = STORY_GOAL;
+    elScore.textContent = displayScore;
+    cheatBuffer  = '';
   }
 });
 
@@ -838,7 +849,7 @@ function trySpawnEgg() {
   if(distanceRan < nextEggZone) return;
 
   // 스폰
-  const eggImgs = [imgs.egg1, imgs.egg2, imgs.egg3];
+  const eggImgs = [imgs.egg1, imgs.egg2, imgs.egg3, imgs.egg4, imgs.egg5];
   const zoneIdx = collectedEggs;
   const y       = COLLECTIBLE_YS[Math.floor(Math.random() * COLLECTIBLE_YS.length)];
   collectibles.push({
@@ -1289,22 +1300,19 @@ function drawEndMary(x, frame) {
 }
 
 // ════════════════════════════════════════════════
-//  드로우: 엔딩씬 제자들 (disciples.png)
-//  bounceY: 위아래 바운스 오프셋 (엔딩A talk/done 단계에서 적용)
+//  드로우: 엔딩씬 예수님 (jesus.png)
 //  발이 GROUND_Y에 닿도록 y 계산
 // ════════════════════════════════════════════════
-function drawDisciples(x, bounceY = 0) {
-  const dy = GROUND_Y - DISC_H + bounceY; // 바운스 오프셋 적용
-  if(imgs.disciples.naturalWidth > 0) {
+function drawJesus(x) {
+  const dy = GROUND_Y - DISC_H;
+  if(imgs.jesus.naturalWidth > 0) {
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(imgs.disciples, x, dy, DISC_W, DISC_H);
+    ctx.drawImage(imgs.jesus, x, dy, DISC_W, DISC_H);
   } else {
-    ctx.fillStyle = isDark?'#9FE1CB':'#1D9E75';
-    for(let i = 0; i < 5; i++) {
-      const px = x + i * (DISC_W / 5) + DISC_W * 0.05;
-      ctx.beginPath(); ctx.arc(px, dy + Math.round(DISC_H * 0.15), Math.round(DISC_W * 0.04), 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.roundRect(px - Math.round(DISC_W*0.03), dy + Math.round(DISC_H*0.25), Math.round(DISC_W*0.07), Math.round(DISC_H*0.5), 3); ctx.fill();
-    }
+    // 폴백: 사람 실루엣
+    ctx.fillStyle = isDark ? '#C8A06E' : '#8B6914';
+    ctx.beginPath(); ctx.arc(x + DISC_W/2, dy + Math.round(DISC_H*0.15), Math.round(DISC_W*0.12), 0, Math.PI*2); ctx.fill();
+    ctx.fillRect(x + Math.round(DISC_W*0.38), dy + Math.round(DISC_H*0.3), Math.round(DISC_W*0.24), Math.round(DISC_H*0.55));
   }
 }
 
@@ -1604,8 +1612,8 @@ function gameLoop(timestamp) {
           endExclAlpha  = 0;
           endExclBounce = 0;
           endWalkFrame  = 0;
-          endAx         = -SPRITE_W;
-          endBx         = W + DISC_W;
+          endAx         = Math.round(W * 0.11); // 마리: 화면 왼쪽 플레이어 위치에서 시작
+          endBx         = W + DISC_W;            // 제자들: 엔딩B에서만 사용
           gamePhase     = 'ending';
           fadeTarget    = 0;
           fadeSpeed     = FADE_SPEED;
@@ -1616,93 +1624,84 @@ function gameLoop(timestamp) {
   }
 
   // ── ENDING: 엔딩 애니메이션 (A/B 분기) ──
+  // A(이스터에그 없음): fadein → 마리 달려서 퇴장 → done(배경만)
+  // B(이스터에그 있음): fadein → walk(제자 만남) → talk(느낌표) → done(2초 대기) → 페이드아웃 → video
   else if(gamePhase === 'ending') {
     endWalkFrame++;
-    // endTimer는 각 서브페이즈에서 필요할 때만 증가 (상단 일괄 증가 제거)
     const endFd = INIT_SPEED * 1.3 * (dt / 16.67);
 
     // fadein: 페이드인 완료 대기
     if(endPhase === 'fadein') {
-      drawDisciples(endBx);
-      drawEndMary(endAx, endWalkFrame);
-      if(fadeAlpha <= 0) endPhase = 'walk';
+      // 엔딩B: 마리가 왼쪽 밖에서 등장 / 엔딩A: 플레이어 위치에서 바로 시작
+      if(endType === 'B' && endAx === Math.round(W * 0.11)) endAx = -SPRITE_W;
+      if(endType === 'B') {
+        drawJesus(endBx);
+        drawEndMary(endAx, endWalkFrame);
+      } else {
+        drawEndMary(endAx, endWalkFrame);
+      }
+      if(fadeAlpha <= 0) endPhase = endType === 'B' ? 'walk' : 'exit';
     }
 
-    // walk: 마리(왼쪽) + 제자들(오른쪽) 서로 접근
-    else if(endPhase === 'walk') {
+    // ══ 엔딩A: 마리 혼자 달려서 퇴장 ══════════════
+    else if(endPhase === 'exit' && endType === 'A') {
       scrolling = true;
       endAx    += endFd;
-      endBx    -= endFd;
-
-      drawDisciples(endBx);
       drawEndMary(endAx, endWalkFrame);
-
-      if(endType === 'A') {
-        if(endAx >= endBx) {
-          scrolling = false;
-          endAx     = endBx;
-          endPhase  = 'talk';
-        }
-      } else {
-        if(endAx >= endBx + DISC_W) {
-          endPhase = 'skip';
-          endTimer = 0;
-        }
+      if(endAx >= W + SPRITE_W) {
+        scrolling = false;
+        endPhase  = 'done'; // 반복 방지 → done으로 전환
+        showOverlay(elEndOv);
       }
     }
 
-    // ══ 엔딩A ══════════════════════════════════════
-    else if(endPhase === 'talk') {
-      endExclBounce = Math.sin(endWalkFrame * 0.1) * Math.round(H * 0.012);
-      endExclAlpha  = Math.min(endExclAlpha + 0.03, 1);
-      drawDisciples(endBx, endExclBounce);
-      drawEndMary(endAx, 0);
-      const exclX = endBx + DISC_W * 0.35;
-      const exclY = GROUND_Y - DISC_H - Math.round(H * 0.02) + endExclBounce;
-      drawExclamation(exclX, exclY, endExclAlpha, 0);
-      if(endExclAlpha >= 1) { endPhase = 'done'; showOverlay(elEndOv); }
-    }
-
-    else if(endPhase === 'done') {
-      endExclBounce = Math.sin(endWalkFrame * 0.1) * Math.round(H * 0.012);
-      drawDisciples(endBx, endExclBounce);
-      drawEndMary(endAx, 0);
-      const exclX = endBx + DISC_W * 0.35;
-      const exclY = GROUND_Y - DISC_H - Math.round(H * 0.02) + endExclBounce;
-      drawExclamation(exclX, exclY, 1, 0);
+    // ══ 엔딩A done: 배경+그라운드만 표시, 마리 없음 ══
+    else if(endPhase === 'done' && endType === 'A') {
+      // 아무것도 그리지 않음 → 배경+그라운드만 보임
     }
 
     // ══ 엔딩B ══════════════════════════════════════
-    // skip: 마리 W*0.3까지 이동 후 고정 / 제자들만 왼쪽으로 흘러 사라짐
-    else if(endPhase === 'skip') {
+    // walk: 마리(왼쪽) + 예수님(오른쪽) 서로 접근
+    // 두 인물 사이 GAP의 중앙이 화면 중앙이 되도록 멈춤
+    // 마리 멈출 x = W/2 - END_GAP/2 - SPRITE_W
+    // 예수님 멈출 x = W/2 + END_GAP/2
+    else if(endPhase === 'walk') {
+      const END_GAP   = Math.round(SPRITE_W * 0.5);       // 두 인물 사이 갭
+      const maryStop  = Math.round(W/2 - END_GAP/2 - SPRITE_W); // 마리 멈출 x
+      const jesusStop = Math.round(W/2 + END_GAP/2);             // 예수님 멈출 x
       scrolling = true;
-      endBx    -= endFd;
-      if(endAx < Math.round(W * 0.3)) endAx += endFd;
-      if(endBx + DISC_W > 0) drawDisciples(endBx);
+      if(endAx  < maryStop)  endAx  += endFd;
+      if(endBx  > jesusStop) endBx  -= endFd;
+      drawJesus(endBx);
       drawEndMary(endAx, endWalkFrame);
-      if(endBx + DISC_W <= 0) { endPhase = 'exit'; endTimer = 0; }
-    }
-
-    // exit: 제자 사라진 후 1.5초 달리기 → 배경 멈춤 → 마리 오른쪽 퇴장
-    else if(endPhase === 'exit') {
-      endTimer += dt;
-      if(endTimer < 1500) {
-        scrolling = true;
-        drawEndMary(endAx, endWalkFrame);
-      } else {
-        scrolling  = false;
-        endAx     += endFd; // clearMode 퇴장과 동일한 속도
-        drawEndMary(endAx, endWalkFrame);
-        if(endAx >= W + SPRITE_W && onFadeComplete === null) {
-          fadeAlpha      = 0;
-          fadeTarget     = 1;
-          fadeSpeed      = FADE_SLOW;
-          onFadeComplete = () => { endPhase = 'video'; onFadeComplete = null; };
-        }
+      if(endAx >= maryStop && endBx <= jesusStop) {
+        scrolling = false;
+        endAx     = maryStop;
+        endBx     = jesusStop;
+        endPhase  = 'talk';
+        endTimer  = 0;
       }
     }
 
-    // fadeout: 페이드 레이어가 게임루프 맨 끝에서 자동 처리됨
+    // talk → done으로 바로 전환 (느낌표/바운스 없음)
+    else if(endPhase === 'talk') {
+      endPhase = 'done';
+      endTimer = 0;
+    }
+
+    // done: 2초 대기 후 페이드아웃 → 영상
+    else if(endPhase === 'done') {
+      endTimer += dt;
+      drawJesus(endBx);
+      drawEndMary(endAx, 0);
+      if(endTimer > 2000 && onFadeComplete === null) {
+        fadeAlpha      = 0;
+        fadeTarget     = 1;
+        fadeSpeed      = FADE_SLOW;
+        onFadeComplete = () => { endPhase = 'video'; onFadeComplete = null; };
+      }
+    }
+
     // video: 영상 대체 코드 — 영상 완성 후 교체 예정
     else if(endPhase === 'video') {
       ctx.fillStyle = '#000';
