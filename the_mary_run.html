@@ -26,8 +26,21 @@ body{background:#1a1a18;display:flex;justify-content:center;align-items:center;m
 /* ── 오버레이 버튼 ── */
 .overlay-btns{display:flex;flex-direction:column;gap:10px;margin-top:10px;width:200px}
 .overlay-btns.row{flex-direction:row;width:auto}
-.overlay-btn{width:100%;padding:12px 0;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;background:#ffffff;color:#333;border:none;-webkit-appearance:none;appearance:none}
-.overlay-btn:hover{background:#f0f0f0}
+.overlay-btn{
+  width:100%;padding:12px 0;
+  font-size:14px;font-weight:600;cursor:pointer;color:#fff;
+  background:transparent;border:none;-webkit-appearance:none;appearance:none;
+  border-image-source:url('assets/ui-button.png');
+  border-image-slice:141 141 141 141 fill;
+  border-width:24px;
+  border-style:solid;
+  border-color:transparent;
+  border-image-repeat:stretch stretch;
+  text-shadow:0 1px 3px rgba(0,0,0,0.5);
+  transition:filter 0.1s;
+}
+.overlay-btn:hover{filter:brightness(1.15)}
+.overlay-btn:active{filter:brightness(0.9)}
 .overlay-btns.row .overlay-btn{width:auto;padding:9px 26px}
 
 /* ── HUD ── */
