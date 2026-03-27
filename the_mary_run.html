@@ -321,8 +321,8 @@ body{overflow:hidden;background:#1a1a18;display:flex;justify-content:center;alig
   // ════════════════════════════════════════════════
   const STORY_GOAL     = 5000;           // 스토리 모드 클리어 점수
   const INIT_SPEED     = 6;              // 시작 속도 (난이도 상향 4→6)
-  const MAX_SPEED      = 20;             // 최대 속도 상한
-  const BOOST_AMOUNT   = 2.5;            // 점수 구간 달성 시 1회 속도 추가량
+  const MAX_SPEED      = 18;             // 최대 속도 상한
+  const BOOST_AMOUNT   = 1.1;            // 점수 구간 달성 시 1회 속도 추가량
   const BOOST_INTERVAL = STORY_GOAL / 2; // 부스트 발동 점수 간격 (STORY_GOAL 기준 자동 계산)
   const INVINCIBLE_MS  = 5000;          // 바구니 무적 시간 (ms)
   const BG_CYCLE_MS    = 30000;         // 배경 전환 주기 (ms) — 30초마다 tomb/street 번갈아
@@ -362,10 +362,10 @@ body{overflow:hidden;background:#1a1a18;display:flex;justify-content:center;alig
   const OB_MARGIN = {
     tombGround1:   { x: 0.35, y: 0.2  }, // 높고 얇은 것: 가로 여유
     tombGround2:   { x: 0.3,  y: 0.25 }, // 넓고 낮은 것: 세로 여유
-    tombAir1:      { x: 0.3,  y: 0.2  }, // 공중: 날개 제외
+    tombAir1:      { x: 0.3,  y: 0.1  }, // 공중: 날개 제외
     streetGround1: { x: 0.35, y: 0.2  },
     streetGround2: { x: 0.3,  y: 0.25 },
-    streetAir1:    { x: 0.3,  y: 0.2  },
+    streetAir1:    { x: 0.3,  y: 0.1  },
   };
   const SCORE_DIVISOR    = 25;    // 이동거리 → 점수 환산 (25px = 1점, 원본 방식)
   const CROW_MIN_SCORE   = 200;   // 까마귀(crow) 등장 시작 점수
@@ -454,9 +454,9 @@ body{overflow:hidden;background:#1a1a18;display:flex;justify-content:center;alig
     // 2단계(중단): 슬라이딩 또는 점프 필수
     // 3단계(상단): 꾹 점프시에만 닿는 높이 → 톡 점프로 통과 가능
     CROW_YS = [
-      GROUND_Y - CROW_H - Math.round(SPRITE_H * 0.1),               // 1단계: 지면 바로 위
-      GROUND_Y - Math.round(SPRITE_H * 0.4) - CROW_H,               // 2단계: 슬라이딩/점프
-      GROUND_Y - SPRITE_H - Math.round(CROW_H * 1.2),               // 3단계: 꾹 점프 최대 높이
+      GROUND_Y - CROW_H - Math.round(SPRITE_H * -0.1),               // 1단계: 지면 바로 위
+      GROUND_Y - Math.round(SPRITE_H * 0.45) - CROW_H,               // 2단계: 슬라이딩/점프
+      GROUND_Y - SPRITE_H - Math.round(CROW_H * 1.0),               // 3단계: 꾹 점프 최대 높이
     ];
 
     // 플레이어 위치 갱신
@@ -1731,10 +1731,10 @@ body{overflow:hidden;background:#1a1a18;display:flex;justify-content:center;alig
     if(gamePhase === 'playing' && standTimer <= 0 && clearMode === 'idle') {
       elapsedMs += dt;
       // 지수 곡선 가속
-      // 공식: INIT_SPEED + (elapsedMs * 0.0004)^1.5
+      // 공식: INIT_SPEED + (elapsedMs * 0.0004)^1.2
       // - 계수 0.0004: 약 40초에 MAX_SPEED 도달하도록 역산한 값 (0.00025→0.0004, 난이도 상향)
-      // - 지수 1.5: 선형(1.0)보다 후반 가속 강하고, 제곱(2.0)보다 초반 완만하게 균형 조정
-      speed = Math.min(INIT_SPEED + Math.pow(elapsedMs * 0.0004, 1.5), MAX_SPEED);
+      // - 지수 1.2: 선형(1.0)보다 후반 가속 강하고, 제곱(2.0)보다 초반 완만하게 균형 조정
+      speed = Math.min(INIT_SPEED + Math.pow(elapsedMs * 0.0004, 1.2), MAX_SPEED);
       if(displayScore >= nextBoostScore) {
         speed          = Math.min(speed + BOOST_AMOUNT, MAX_SPEED);
         nextBoostScore += BOOST_INTERVAL;
