@@ -105,14 +105,15 @@ body{overflow:hidden;background:#1a1a18;display:flex;justify-content:center;alig
   background-size:contain;background-repeat:no-repeat;background-position:center;
   transition:transform 0.15s;
 }
+/* 무한모드: 바구니 이미지로 교체 */
+.egg-slot.filled.basket{background-image:url('assets/easter-egg-basket.png')}
 /* 스토리모드: 알 5종 각각 id 기반 직접 지정 */
 #egg-slot-0.filled{background-image:url('assets/easter-egg-1.png')}
 #egg-slot-1.filled{background-image:url('assets/easter-egg-2.png')}
 #egg-slot-2.filled{background-image:url('assets/easter-egg-3.png')}
 #egg-slot-3.filled{background-image:url('assets/easter-egg-4.png')}
 #egg-slot-4.filled{background-image:url('assets/easter-egg-5.png')}
-/* 무한모드: 바구니 이미지로 교체 */
-.egg-slot.filled.basket{background-image:url('assets/easter-egg-basket.png')}
+
 
 /* ── 볼륨 컨트롤 ── */
 #volume-control{
@@ -479,10 +480,10 @@ body{overflow:hidden;background:#1a1a18;display:flex;justify-content:center;alig
 
     // disciples 드로우 크기 (SPRITE_H * 1.15 기준, 자연 비율 1.777 고정 — 규칙5 준수)
     // disciples.png 실측: 1137x640 → w/h = 1.777
-    DISC_H = Math.round(SPRITE_H * 1.15); // 마리보다 15% 크게
+    DISC_H = Math.round(SPRITE_H * 1.32); // 마리보다 15% 크게
     DISC_W = imgs.disciples.naturalWidth > 0
       ? Math.round(DISC_H * (imgs.disciples.naturalWidth / imgs.disciples.naturalHeight))
-      : Math.round(DISC_H * 1.777);
+      : Math.round(DISC_H * 1.8);
 
     // 배경 오프셋 리셋
     bgXTomb   = 0;
@@ -1541,7 +1542,7 @@ body{overflow:hidden;background:#1a1a18;display:flex;justify-content:center;alig
   function drawJesus(x) {
     if(imgs.disciples.naturalWidth > 0) {
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(imgs.disciples, x, player.ground, DISC_W, DISC_H);
+      ctx.drawImage(imgs.disciples, x, (player.ground*0.9), DISC_W, DISC_H);
     } else {
       // 폴백: 사람 실루엣
       ctx.fillStyle = isDark ? '#C8A06E' : '#8B6914';
